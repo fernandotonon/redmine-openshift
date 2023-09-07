@@ -10,8 +10,14 @@ So the steps to deploy this application are:
 2. Give root permissions to the default service account: *oc adm policy add-scc-to-user anyuid -z default -n yourprojectname*
 
 3. Create the template:
-   *oc create -f https://raw.githubusercontent.com/antoniogallegosaez/redmine-openshift/master/redmine-mysql-ephemeral.yaml*
+   ```
+   oc create -f https://raw.githubusercontent.com/fernandotonon/redmine-openshift/master/redmine-mysql-ephemeral.yaml
+   ```
+   or
+   ```
+   oc create -f https://raw.githubusercontent.com/fernandotonon/redmine-openshift/master/redmine-mysql-persistent.yaml
+   ```
 
-4. From the webconsole, access to the project, press Add To Project and create the app using the previously created template.
+5. From the webconsole, access to the project, press Add To Project and create the app using the previously created template.
 
-5. Please wait until the pods are ready, then you can log-in with the following Redmine credentials: admin/admin
+6. Please wait until the pods are ready, then you can log-in with the following Redmine credentials: admin/admin
