@@ -1,0 +1,215 @@
+apiVersion: v1
+kind: Template
+metadata:
+  name: redmine-mysql-persistent
+labels:
+  template: redmine-mysql-persistent
+message: |-
+  The following service(s) have been created in your project: mysql / ${REDMINE_SERVICE}. The user for Redmine access is: admin/admin.
+objects:
+- apiVersion: v1
+  kind: Secret
+  metadata:
+    name: mysql
+  stringData:
+    database-password: ${MYSQL_PASSWORD}
+    database-root-password: ${MYSQL_PASSWORD}
+    database-user: ${MYSQL_USER}
+
+- apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: mysql-pvc
+  spec:
+    accessModes:
+    - ReadWriteOnce
+    resources:
+      requests:
+        storage: 1Gi
+
+- apiVersion: v1
+  kind: DeploymentConfig
+  metadata:
+    labels:
+      app: redmine
+      template: redmine-mysql-persistent
+    name: mysql
+  spec:
+    replicas: 1
+    selector:
+      name: mysql
+    strategy:
+      type: Rolling
+      rollingParams:
+        intervalSeconds: 1
+        maxSurge: 25%
+        maxUnavailable: 25%
+        timeoutSeconds: 600
+        updatePeriodSeconds: 1
+    template:
+      metadata:
+        labels:
+          name: mysql
+      spec:
+        containers:
+        - env:
+          - name: MYSQL_USER
+            valueFrom:
+              secretKeyRef:
+                key: database-user
+                name: mysql
+          - name: MYSQL_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                key: database-password
+                name: mysql
+          - name: MYSQL_ROOT_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                key: database-root-password
+                name: mysql
+          - name: MYSQL_DATABASE
+            value: redmine
+          image: mysql:latest
+          imagePullPolicy: IfNotPresent
+          name: mysql
+          ports:
+          - containerPort: 3306
+            protocol: TCP
+          volumeMounts:
+          - mountPath: /var/lib/mysql/data
+            name: mysql-data
+        volumes:
+        - name: mysql-data
+          persistentVolumeClaim:
+            claimName: mysql-pvc
+    triggers:
+    - type: ConfigChange
+
+- apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: redmine-config-pvc
+  spec:
+    accessModes:
+    - ReadWriteOnce
+    resources:
+      requests:
+        storage: 1Gi
+
+- apiVersion: v1
+  kind: DeploymentConfig
+  metadata:
+    labels:
+      app: redmine
+      template: redmine-mysql-persistent
+    name: redmine
+  spec:
+    replicas: 1
+    selector:
+      app: redmine
+      deploymentconfig: redmine
+    strategy:
+      type: Rolling
+      rollingParams:
+        intervalSeconds: 1
+        maxSurge: 25%
+        maxUnavailable: 25%
+        timeoutSeconds: 600
+        updatePeriodSeconds: 1
+    template:
+      metadata:
+        labels:
+          app: redmine
+          deploymentconfig: redmine
+      spec:
+        containers:
+        - env:
+          - name: REDMINE_DB_MYSQL
+            value: mysql
+          - name: REDMINE_DB_PASSWORD
+            value: ${MYSQL_PASSWORD}
+          image: docker.io/redmine
+          imagePullPolicy: IfNotPresent
+          name: redmine
+          ports:
+          - containerPort: 3000
+            protocol: TCP
+          volumeMounts:
+          - mountPath: /usr/src/redmine/files
+            name: redmine-files
+          - mountPath: /usr/src/redmine/config/
+            name: redmine-config
+        volumes:
+        - name: redmine-files
+          emptyDir: {}
+        - name: redmine-config
+          persistentVolumeClaim:
+            claimName: redmine-config-pvc
+    triggers:
+    - type: ConfigChange
+
+- apiVersion: v1
+  kind: Service
+  metadata:
+    labels:
+      app: mysql
+      template: redmine-mysql-persistent
+    name: mysql
+  spec:
+    ports:
+    - name: mysql
+      port: 3306
+      protocol: TCP
+      targetPort: 3306
+    selector:
+      name: mysql
+
+- apiVersion: v1
+  kind: Service
+  metadata:
+    labels:
+      app: redmine
+      template: redmine-mysql-persistent
+    name: ${REDMINE_SERVICE}
+  spec:
+    ports:
+    - name: 3000-tcp
+      port: 3000
+      protocol: TCP
+      targetPort: 3000
+    selector:
+      deploymentconfig: redmine
+
+- apiVersion: v1
+  id: redmine-http
+  kind: Route
+  metadata:
+    annotations:
+      openshift.io/host.generated: "true"
+      description: Route for redmine's http service.
+    labels:
+      app: redmine
+      template: redmine-mysql-persistent
+    name: ${REDMINE_SERVICE}
+  spec:
+    to:
+      kind: Service
+      name: ${REDMINE_SERVICE}
+
+parameters:
+- description: Name of the redmine service
+  displayName: Redmine service
+  name: REDMINE_SERVICE
+  value: redmine
+  required: true
+- description: Username for MySQL user that will be used for accessing the database.
+  displayName: MySQL Connection Username
+  value: admin
+  name: MYSQL_USER
+  required: true
+- description: Password for the MySQL connection user
+  displayName: MySQL Connection Password
+  value: redhat123
+  name: MYSQL_PASSWORD
+  required: true
