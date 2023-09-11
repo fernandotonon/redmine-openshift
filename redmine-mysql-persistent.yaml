@@ -77,7 +77,7 @@ objects:
           - containerPort: 3306
             protocol: TCP
           volumeMounts:
-          - mountPath: /var/lib/mysql/data
+          - mountPath: /var/lib/mysql
             name: mysql-data
         volumes:
         - name: mysql-data
